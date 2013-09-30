@@ -1,0 +1,88 @@
+#!/usr/bin/python
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+#
+# Author: liangxiaoping <shapeliang@gmail.com>
+#
+
+
+"""
+Test Harness
+"""
+
+import os
+import sys
+
+from oslo.config import cfg
+
+
+possible_topdir = os.path.normpath(os.path.join(os.path.abspath(sys.argv[0]),
+                                   os.pardir,
+                                   os.pardir))
+
+from testcase import nova_api
+
+CONF = cfg.CONF
+
+
+class BaseApp(object):
+
+    name = None
+
+    @classmethod
+    def add_argument_parser(cls, subparsers):
+        parser = subparsers.add_parser(cls.name, help=cls.__doc__)
+        parser.set_defaults(cmd_class=cls)
+        return parser
+
+
+class Nova(BaseApp):
+    """Nova test harness."""
+
+    name = 'nova'
+
+    @classmethod
+    def add_argument_parser(cls, subparsers):
+        parser = super(Nova, cls).add_argument_parser(subparsers)
+        parser.add_argument('test_case', default=None, nargs='?',
+                            help=('Test case name'))
+
+    @classmethod
+    def main(cls):
+        test_case = CONF.command.test_case
+        try:
+            test_case = getattr(nova_api, test_case)
+            test_case.main()
+        except AttributeError:
+            print "===Invalid test case==="
+        except Exception:
+            raise
+
+
+CMDS = [
+    Nova,
+    ]
+
+
+def add_command_parsers(subparsers):
+    for cmd in CMDS:
+        cmd.add_argument_parser(subparsers)
+
+
+command_opt = cfg.SubCommandOpt('command',
+                                title='Commands',
+                                help='Available commands',
+                                handler=add_command_parsers)
+
+
+def main(argv=None, config_files=None):
+    CONF.register_cli_opt(command_opt)
+    CONF(args=argv[1:],
+         project='harness',
+         version='0.1',
+         usage='%(prog)s [' + '|'.join([cmd.name for cmd in CMDS]) + ']',
+         default_config_files=config_files)
+    CONF.command.cmd_class.main()
+
+
+if __name__ == '__main__':
+    main(argv=sys.argv)
